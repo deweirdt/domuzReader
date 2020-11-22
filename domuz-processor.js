@@ -15,7 +15,7 @@ var channelWrapper = connection.createChannel({
         return Promise.all([
             channel.assertQueue(process.env.AMQP_QUEUE, { durable: true }),
             channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout'),
-            channel.prefetch(1000),
+            channel.prefetch(200),
             channel.bindQueue(process.env.AMQP_QUEUE, process.env.AMQP_EXCHANGE, ''),
             channel.consume(process.env.AMQP_QUEUE, onMessage)
         ])
@@ -45,32 +45,38 @@ const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
     //storePumpState(message);
+
     for(let room of message.heatArea) {
         storeRoomTemp(message, room);
-        /*
-        for(let heatCtrl of room.heatCtrls) {
-            storeRoomTemp(message, room, heatCtrl);
-        }
-        */
-        
     }
+    
+    for(let heatCtrl of message.heatCtrls) {
+        storeHeatCtrls(message, heatCtrl);
+    }
+    
+
     
     //channelWrapper.ack(data);
 
 }
 
-function storePumpState(domuz) {
+function storeHeatCtrls(domuz, heatCtrl) {
     return new Promise((stored, reject) => {
         influx.writePoints([
             {
-                measurement: 'pump',
+                measurement: 'heatCtrls',
+                tags: {
+                    collector: domuz.name,
+                    heatCtrlNumber: heatCtrl.heatCtrlNumber
+                },
                 fields: {  
-                    pump: domuz.pump.active ? 1 : 0,
+                    state: heatCtrl.state,
+                    percentage: heatCtrl.valveState
                 },
                 timestamp: nano.toString(nano.fromISOString(domuz.date))
             }
         ]).then(() => {
-            console.log("Stored pump state");
+            console.log("Stored: storeHeatCtrls %s Ctrlnumber: %s", domuz.name, heatCtrl.heatCtrlNumber);
             stored();
         }).catch((err) => {
             console.log("Error while writingPoints: ", err.message);
@@ -107,5 +113,4 @@ function storeRoomTemp(domuz, room) {
             reject();
         });  
     });
-
 }
