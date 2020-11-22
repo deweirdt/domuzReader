@@ -15,7 +15,7 @@ var channelWrapper = connection.createChannel({
         return Promise.all([
             channel.assertQueue(process.env.AMQP_QUEUE, { durable: true }),
             channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout'),
-            channel.prefetch(1),
+            channel.prefetch(1000),
             channel.bindQueue(process.env.AMQP_QUEUE, process.env.AMQP_EXCHANGE, ''),
             channel.consume(process.env.AMQP_QUEUE, onMessage)
         ])
@@ -45,9 +45,12 @@ const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
     for(let room of message.heatArea) {
+        storeRoomTemp(message, room);
+        /*
         for(let heatCtrl of room.heatCtrls) {
             storeRoomTemp(message, room, heatCtrl);
         }
+        */
         
     }
     
@@ -55,14 +58,13 @@ const onMessage = data => {
 
 }
 
-function storeRoomTemp(domuz, room, heatCtrl) {
+function storeRoomTemp(domuz, room) {
     return new Promise((stored, reject) => {
         influx.writePoints([
             {
                 measurement: 'roomTemp',
                 tags: {
                     collector: domuz.name,
-                    heatCtrlNumber: heatCtrl.heatCtrlNumber,
                     room: room.name,
                 },
                 fields: {  
@@ -72,14 +74,12 @@ function storeRoomTemp(domuz, room, heatCtrl) {
                     requestedDayTemp: room.requestedDayTemp,
                     requestedNightTemp: room.requestedNightTemp,
                     areaState: room.areaState,
-                    mode: room.mode,
-                    heatCtrlState: heatCtrl.state,
-                    heatCtrlValveState: heatCtrl.valveState
+                    mode: room.mode
                 },
                 timestamp: nano.toString(nano.fromISOString(domuz.date))
             }
         ]).then(() => {
-            console.log("Stored: ", heatCtrl.heatCtrlNumber);
+            console.log("Stored: ", room.name);
             stored();
         }).catch((err) => {
             console.log("Error while writingPoints: ", err.message);
