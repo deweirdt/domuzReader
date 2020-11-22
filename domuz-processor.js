@@ -3,6 +3,16 @@ require('dotenv').config();
 const Influx = require('influx');
 const nano = require('nano-seconds');
 
+var mongo = require('mongodb').MongoClient;
+var url = 'mongodb://' + process.env.MONGO_DB + ':27017/';
+var dbo;
+
+const mongoConnection = mongo.connect(url, function(err, db) {
+    if (err) throw err;
+    dbo = db.db("domuz");
+});
+
+
 amqpConnection = 'amqp://' + process.env.AMQP_USERNAME +':'+process.env.AMQP_PASSWORD +'@'+process.env.AMQP_HOST;
 const connection = amqp.connect([amqpConnection]);
 connection.on('connect', () => console.log('AMQP Connected!'));
@@ -15,7 +25,7 @@ var channelWrapper = connection.createChannel({
         return Promise.all([
             channel.assertQueue(process.env.AMQP_QUEUE, { durable: true }),
             channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout'),
-            channel.prefetch(200),
+            channel.prefetch(1),
             channel.bindQueue(process.env.AMQP_QUEUE, process.env.AMQP_EXCHANGE, ''),
             channel.consume(process.env.AMQP_QUEUE, onMessage)
         ])
@@ -45,6 +55,7 @@ const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
     //storePumpState(message);
+    storeRawMessage(message);
 
     for(let room of message.heatArea) {
         storeRoomTemp(message, room);
@@ -53,11 +64,14 @@ const onMessage = data => {
     for(let heatCtrl of message.heatCtrls) {
         storeHeatCtrls(message, heatCtrl);
     }
-    
+    channelWrapper.ack(data);
+}
 
-    
-    //channelWrapper.ack(data);
-
+function storeRawMessage(message) {
+    dbo.collection("rawdata").insertOne(message, function(err, res) {
+        if (err) throw err;
+        console.log("1 document inserted");
+      });
 }
 
 function storeHeatCtrls(domuz, heatCtrl) {
