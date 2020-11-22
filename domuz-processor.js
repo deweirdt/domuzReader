@@ -44,7 +44,7 @@ influx.getDatabaseNames()
 const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
-    storePumpState(domuz);
+    //storePumpState(message);
     for(let room of message.heatArea) {
         storeRoomTemp(message, room);
         /*
@@ -89,7 +89,7 @@ function storeRoomTemp(domuz, room) {
                     room: room.name,
                 },
                 fields: {  
-                    pump: domuz.pump.active,
+                    pump: domuz.pump.active ? 1 : 0,
                     actualTemp: room.actualTemp,
                     targetTemp: room.targetTemp,
                     requestedDayTemp: room.requestedDayTemp,
