@@ -63,10 +63,10 @@ function storeRoomTemp(domuz, room, heatCtrl) {
                 tags: {
                     collector: domuz.name,
                     heatCtrlNumber: heatCtrl.heatCtrlNumber,
+                    room: room.name,
                 },
                 fields: {  
                     pump: domuz.pump.active,
-                    room: room.name,
                     actualTemp: room.actualTemp,
                     targetTemp: room.targetTemp,
                     requestedDayTemp: room.requestedDayTemp,
