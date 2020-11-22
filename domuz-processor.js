@@ -44,6 +44,7 @@ influx.getDatabaseNames()
 const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
+    storePumpState(domuz);
     for(let room of message.heatArea) {
         storeRoomTemp(message, room);
         /*
@@ -56,6 +57,26 @@ const onMessage = data => {
     
     //channelWrapper.ack(data);
 
+}
+
+function storePumpState(domuz) {
+    return new Promise((stored, reject) => {
+        influx.writePoints([
+            {
+                measurement: 'pump',
+                fields: {  
+                    pump: domuz.pump.active ? 1 : 0,
+                },
+                timestamp: nano.toString(nano.fromISOString(domuz.date))
+            }
+        ]).then(() => {
+            console.log("Stored pump state");
+            stored();
+        }).catch((err) => {
+            console.log("Error while writingPoints: ", err.message);
+            reject();
+        });  
+    });
 }
 
 function storeRoomTemp(domuz, room) {
@@ -85,29 +106,6 @@ function storeRoomTemp(domuz, room) {
             console.log("Error while writingPoints: ", err.message);
             reject();
         });  
-
     });
-    /*
-    influx.writePoints([
-        {
-            measurement: 'power',
-            fields: {  
-                voltage: data.reading.voltage, 
-                power: data.reading.power, 
-                current: data.reading.current ,
-                daypowerwh: data.reading.daypower_wh,
-                ipaddr: data.ipaddr,
-                deviceID: data.deviceID,
-                model: data.model,
-                alias: data.alias
-            },
-            timestamp: nano.toString(nano.fromISOString(data.time))
-        }
-    ]).then(() => {
-        confirm(true);
-    }).catch((err) => {
-        console.log("Error while writingPoints: ", err.message);
-        confirm(true);
-    });   
-    */
+
 }
