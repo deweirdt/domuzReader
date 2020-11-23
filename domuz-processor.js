@@ -69,7 +69,7 @@ const onMessage = data => {
     //console.log("List of promisses: ", promiseList);
     Promise.all(promiseList).then((values) => {
         console.log("All done");
-        //channelWrapper.ack(data);
+        channelWrapper.ack(data);
     });
 }
 
