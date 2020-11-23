@@ -1,11 +1,13 @@
 {
+	"date": "2020-11-21T22:35:20.678Z",
+	"name": "TechRuimte",
 	"pump": {
-		"active": true
+		"active": false
 	},
 	"heatArea": [{
 		"name": "Bureau",
 		"areaNumber": 1,
-		"actualTemp": 22.5,
+		"actualTemp": 22.6,
 		"targetTemp": 19,
 		"requestedDayTemp": 22,
 		"requestedNightTemp": 19,
@@ -27,7 +29,7 @@
 	}, {
 		"name": "Keuken",
 		"areaNumber": 4,
-		"actualTemp": 24.2,
+		"actualTemp": 23.4,
 		"targetTemp": 0,
 		"requestedDayTemp": 21,
 		"requestedNightTemp": 19,
@@ -49,7 +51,7 @@
 	}, {
 		"name": "Wasplaats",
 		"areaNumber": 6,
-		"actualTemp": 16.1,
+		"actualTemp": 16.3,
 		"targetTemp": 15,
 		"requestedDayTemp": 15,
 		"requestedNightTemp": 15,

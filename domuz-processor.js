@@ -55,23 +55,37 @@ const onMessage = data => {
     var message = JSON.parse(data.content.toString());
     console.log("Received message: %j", message);
     //storePumpState(message);
-    storeRawMessage(message);
+    var promiseList = [];
+    promiseList.push(storeRawMessage(message));
 
     for(let room of message.heatArea) {
-        storeRoomTemp(message, room);
+        promiseList.push(storeRoomTemp(message, room));
     }
     
     for(let heatCtrl of message.heatCtrls) {
-        storeHeatCtrls(message, heatCtrl);
+        promiseList.push(storeHeatCtrls(message, heatCtrl));
     }
-    channelWrapper.ack(data);
+    
+    //console.log("List of promisses: ", promiseList);
+    Promise.all(promiseList).then((values) => {
+        console.log("All done");
+        //channelWrapper.ack(data);
+    });
 }
 
 function storeRawMessage(message) {
-    dbo.collection("rawdata").insertOne(message, function(err, res) {
-        if (err) throw err;
-        console.log("1 document inserted");
-      });
+    return new Promise((stored, reject) => {
+        dbo.collection("rawdata").insertOne(message, function(err, res) {
+            if (err) {
+                reject();
+                throw err;
+            } else {
+                stored();
+            }
+            console.log("1 document inserted");
+          });
+    });
+    
 }
 
 function storeHeatCtrls(domuz, heatCtrl) {
