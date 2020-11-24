@@ -22,10 +22,16 @@ const channelWrapper = connection.createChannel({
   setup: channel => channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout')
 });
 
-
+const options = {
+    //...
+    hostname: process.env.DOMUZ,
+    path: '/data/static.xml',
+    timeout: 3000,
+};  
 
 function readDomuzdata() {
-    var req = http.get('http://' + process.env.DOMUZ + '/data/static.xml', (resp) => {
+    console.log("http options are: %j", options);
+    var req = http.get(options, (resp) => {
         var packet = '';
         
         resp.on('data', (data) => {
@@ -34,9 +40,13 @@ function readDomuzdata() {
     
         resp.on("end", () => {
             parser.parseString(packet, function(err, result) {
-                //console.log("Result is: %j", result);
-                domuzData = parseData(result);
-                publishDomuzData(domuzData);
+                if(err) {
+                    console.log("Problem in parsing: ", err);
+                } else {
+                    domuzData = parseData(result);
+                    console.log("Result is: %j", domuzData);
+                    publishDomuzData(domuzData);
+                }
             });
         });
 
@@ -46,7 +56,8 @@ function readDomuzdata() {
     
     }).end();
     req.on('error', function(e) {
-        //console.log("Req error: ", e);
+        console.log("Req error: ", e);
+        req.abort();
     });
     req.on('timeout', function(e) {
         console.log("Req timeout: ", e);
@@ -62,44 +73,47 @@ function parseData(data) {
 
     let heatArea = [];
     let heatCtrls = [];
-    
-    for(let heatCtrl of data.devices.device[0].heatctrl) {
-        let dummy = {
-            inuse: !!Number(heatCtrl.inuse[0]),
-            heatCtrlNumber: Number(heatCtrl.$.nr),
-            heatAreaNr: Number(heatCtrl.heatarea_nr[0]),
-            state: Number(heatCtrl.heatctrl_state[0]),
-            valveState: Number(heatCtrl.actor_percent[0])
+    try {
+        for(let heatCtrl of data.devices.device[0].heatctrl) {
+            let dummy = {
+                inuse: !!Number(heatCtrl.inuse[0]),
+                heatCtrlNumber: Number(heatCtrl.$.nr),
+                heatAreaNr: Number(heatCtrl.heatarea_nr[0]),
+                state: Number(heatCtrl.heatctrl_state[0]),
+                valveState: Number(heatCtrl.actor_percent[0])
+            }
+            heatCtrls.push(dummy);
         }
-        heatCtrls.push(dummy);
-    }
-    
-    for(let area of data.devices.device[0].heatarea) {
-        let dummy = {
-            name: area.heatarea_name[0],
-            areaNumber: Number(area.$.nr),
-            actualTemp: Number(area.t_actual[0]),
-            targetTemp: Number(area.t_target[0]),
-            requestedDayTemp: Number(area.t_heat_day[0]),
-            requestedNightTemp: Number(area.t_heat_night[0]),
-            areaState: area.heatarea_state[0],
-            mode: getHeaterMode(area.heatarea_mode[0]),
-            heatCtrls: heatCtrls.filter(x => x.heatAreaNr === Number(area.$.nr))
+        
+        for(let area of data.devices.device[0].heatarea) {
+            let dummy = {
+                name: area.heatarea_name[0],
+                areaNumber: Number(area.$.nr),
+                actualTemp: Number(area.t_actual[0]),
+                targetTemp: Number(area.t_target[0]),
+                requestedDayTemp: Number(area.t_heat_day[0]),
+                requestedNightTemp: Number(area.t_heat_night[0]),
+                areaState: area.heatarea_state[0],
+                mode: getHeaterMode(area.heatarea_mode[0]),
+                heatCtrls: heatCtrls.filter(x => x.heatAreaNr === Number(area.$.nr))
+            }
+            heatArea.push(dummy);
         }
-        heatArea.push(dummy);
-    }
 
-    let domuzData = {
-        date: new Date(),
-        name: data.devices.device[0].name[0],
-        pump: {
-            active: !!Number(data.devices.device[0].pump_output[0].pump_isactive[0])
-        },
-        heatArea: heatArea,
-        heatCtrls: heatCtrls
+        let domuzData = {
+            date: new Date(),
+            name: data.devices.device[0].name[0],
+            pump: {
+                active: !!Number(data.devices.device[0].pump_output[0].pump_isactive[0])
+            },
+            heatArea: heatArea,
+            heatCtrls: heatCtrls
+        }
+        //console.log("HeatArea: %j", domuzData);
+        return domuzData;
+    } catch(err) {
+        console.log("Could not parse the data: %j", data);
     }
-    //console.log("HeatArea: %j", domuzData);
-    return domuzData;
 }
 
 function getHeaterMode(data) {
@@ -134,4 +148,5 @@ function publishDomuzData(domuzData) {
 
 //readDomuzdata();
 //Read each minute
+//setInterval(readDomuzdata, 5000);
 setInterval(readDomuzdata, 60000);
