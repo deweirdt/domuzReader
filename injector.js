@@ -29,8 +29,9 @@ const options = {
     timeout: 3000,
 };  
 
+console.log("Domuz connection are: %j", options);
+
 function readDomuzdata() {
-    console.log("http options are: %j", options);
     var req = http.get(options, (resp) => {
         var packet = '';
         
@@ -39,15 +40,23 @@ function readDomuzdata() {
         });
     
         resp.on("end", () => {
-            parser.parseString(packet, function(err, result) {
-                if(err) {
-                    console.log("Problem in parsing: ", err);
-                } else {
-                    domuzData = parseData(result);
-                    console.log("Result is: %j", domuzData);
-                    publishDomuzData(domuzData);
-                }
-            });
+            try {
+                parser.parseString(packet, function(err, result) {
+                    if(err) {
+                        console.log("Problem in parsing: ", err);
+
+                    } else {
+                        domuzData = parseData(result);
+                        console.log("Result is: %s", domuzData.date);
+                        publishDomuzData(domuzData);
+                        
+                    }
+                    packet = '';
+                });
+            } catch(err) {
+                console.log("Issue with parsing data: ", err);
+                packet = '';
+            }
         });
 
         resp.on("error", (err) => {
