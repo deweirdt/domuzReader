@@ -1,45 +1,48 @@
 require('dotenv').config()
-const amqp = require('amqp-connection-manager');
+const amqp = require('./amqp.controller');
 const xml2js = require('xml2js');
+const domuzDevices = require('./domuz-lookup.json');
+
 
 const http = require('http');
 const { read } = require('fs');
+const { start } = require('repl');
+
 parser = new xml2js.Parser( {
     normalizeTags: true,
     normalize: true,
 });
 
-amqpConnection = 'amqp://' + process.env.AMQP_USERNAME +':'+process.env.AMQP_PASSWORD +'@'+process.env.AMQP_HOST;
 
-const connection = amqp.connect([amqpConnection]);
 
-connection.on('connect', () => console.log('AMQP Connected!'));
-connection.on('disconnect', err => console.log('AMQP Disconnected.', err.stack));
+function startReadout() {
+    console.log("Starting readout");
+    domuzDevices.forEach( (domuzDevice) => {
+      readoutDevice(domuzDevice);
+    });
+    console.log("Done reading");
+}
 
-// Create a channel wrapper
-const channelWrapper = connection.createChannel({
-  json: true,
-  setup: channel => channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout')
-});
+function readoutDevice(domuzDevice) {
+    console.log("Reading data from: ", domuzDevice.alias);
 
-const options = {
-    //...
-    hostname: process.env.DOMUZ,
-    path: '/data/static.xml',
-    timeout: 3000,
-};  
+    const options = {
+        //...
+        hostname: domuzDevice.ip,
+        path: '/data/static.xml',
+        timeout: 3000,
+    };  
 
-console.log("Domuz connection are: %j", options);
-
-function readDomuzdata() {
     var req = http.get(options, (resp) => {
-        var packet = '';
-        
-        resp.on('data', (data) => {
-            packet += data;
+        let packet = '';
+    
+        resp.on('data', (chunk) => {
+            //console.log("Received part of the data");
+            packet += chunk;
         });
     
-        resp.on("end", () => {
+        resp.on('end', () => {
+            //console.log("Got data for: " + domuzDevice.alias + " data: ", packet);
             try {
                 parser.parseString(packet, function(err, result) {
                     if(err) {
@@ -47,9 +50,14 @@ function readDomuzdata() {
 
                     } else {
                         domuzData = parseData(result);
-                        console.log("Result is: %s", domuzData.date);
-                        publishDomuzData(domuzData);
-                        
+                        console.log("Result is received for: ", domuzDevice.alias);
+
+                        for(let i=0;i<500;i++) {
+                            amqp.publish(domuzData);
+                        }
+
+
+                        amqp.publish(domuzData);
                     }
                     packet = '';
                 });
@@ -57,26 +65,15 @@ function readDomuzdata() {
                 console.log("Issue with parsing data: ", err);
                 packet = '';
             }
+        
         });
+      }).on("error", (err) => {
+        // No idea why I'm having this expection here, just hide it :)
+        //console.log("Error: ", err.message);
+      })
 
-        resp.on("error", (err) => {
-            console.log("Error received: ", err);
-        });
-    
-    }).end();
-    req.on('error', function(e) {
-        console.log("Req error: ", e);
-        req.abort();
-    });
-    req.on('timeout', function(e) {
-        console.log("Req timeout: ", e);
-        req.abort();
-    });
-    req.on('uncaughtException', function(e) {
-        console.log("Req uncaughtException: ", e);
-        req.abort();
-    });
 }
+
 
 function parseData(data) {
 
@@ -142,20 +139,10 @@ function getHeaterMode(data) {
     return mode;
 }
 
-function publishDomuzData(domuzData) {
-    console.log("Publishing %j", domuzData);
-    channelWrapper.publish(process.env.AMQP_EXCHANGE, '', JSON.parse(JSON.stringify(domuzData)), { contentType: 'application/json', persistent: true })
-        .then(function() {
-            console.log("Message pushed on the AMPQ");
-        })
-        .catch(err => {
-            console.log("Message was rejected:", err.stack);
-            channelWrapper.close();
-            connection.close();
-        });
-}
 
-//readDomuzdata();
-//Read each minute
-//setInterval(readDomuzdata, 5000);
-setInterval(readDomuzdata, 60000);
+amqp.setupConnection();
+
+startReadout();
+setInterval(startReadout, 5000);
+console.log('Starting Domuz readout');
+

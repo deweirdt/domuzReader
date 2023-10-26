@@ -1,32 +1,9 @@
-var amqp = require('amqp-connection-manager');
+const amqp = require('./amqp.controller');
 require('dotenv').config();
 const Influx = require('influx');
 const nano = require('nano-seconds');
 
 
-amqpConnection = 'amqp://' + process.env.AMQP_USERNAME +':'+process.env.AMQP_PASSWORD +'@'+process.env.AMQP_HOST;
-const connection = amqp.connect([amqpConnection]);
-connection.on('connect', () => console.log('AMQP Connected!'));
-connection.on('disconnect', err => console.log('AMQP Disconnected.', err.stack));
-
-// Set up a channel listening for messages in the queue.
-var channelWrapper = connection.createChannel({
-    setup: channel => {
-        // `channel` here is a regular amqplib `ConfirmChannel`.
-        return Promise.all([
-            channel.assertQueue(process.env.AMQP_QUEUE, { durable: true }),
-            channel.assertExchange(process.env.AMQP_EXCHANGE, 'fanout'),
-            channel.prefetch(1),
-            channel.bindQueue(process.env.AMQP_QUEUE, process.env.AMQP_EXCHANGE, ''),
-            channel.consume(process.env.AMQP_QUEUE, onMessage)
-        ])
-    }
-});
-
-channelWrapper.waitForConnect()
-.then(function() {
-    console.log("Listening for AMQP messages");
-});
 
 const influx = new Influx.InfluxDB({
     host: process.env.INFLUX_HOST,
@@ -40,10 +17,13 @@ influx.getDatabaseNames()
           }
     })
     .then(() => {
+        //This will connect to the rabbitMQ
+        amqp.setupConnection();
+        amqp.consume(process.env.RABBIT_MQ_EXCHANGE, process.env.RABBIT_MQ_QUEUE, processMsg);
     });
 
-const onMessage = data => {
-    var message = JSON.parse(data.content.toString());
+function processMsg(msg, confirm) {
+    var message = JSON.parse(msg);
     console.log("Received message: %j", message);
     //storePumpState(message);
     var promiseList = [];
@@ -60,7 +40,7 @@ const onMessage = data => {
     //console.log("List of promisses: ", promiseList);
     Promise.all(promiseList).then((values) => {
         console.log("All done");
-        channelWrapper.ack(data);
+        confirm(true);
     });
 }
 
