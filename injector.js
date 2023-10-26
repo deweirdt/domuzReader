@@ -51,12 +51,6 @@ function readoutDevice(domuzDevice) {
                     } else {
                         domuzData = parseData(result);
                         console.log("Result is received for: ", domuzDevice.alias);
-
-                        for(let i=0;i<500;i++) {
-                            amqp.publish(domuzData);
-                        }
-
-
                         amqp.publish(domuzData);
                     }
                     packet = '';
